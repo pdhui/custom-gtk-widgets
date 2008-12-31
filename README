@@ -1,2 +1,28 @@
 This is a collection of gtk widgets I've made.  As i find the sources to them
 i'll add them here.
+
+gtkmodebutton
+
+	This is a simple button that performs an action similar to a radio
+	button.  It can have one active setting. However you are free to
+	pack in many widgets (but there can be only one, highlander!).
+
+	Sorry, that tv show ruled.
+
+bdbliststore
+
+	This is a GtkTreeModel implementation that uses a BDB database as the
+	backend.  This allows for tuning how you want pages cached and what
+	not on the database level.
+
+	The current requirement is that the database is a DB_RECNO (a btree
+	with auto-generated record nunbers, aka keys) and that it is created
+	with the DB_RENUMBER option so that a record offset == key.
+
+eggsqlitestore
+
+	This is an old hack to make a GtkTreeModel that was backed by
+	sqlite.  I made many more optimizations in other versions i wrote,
+	but im not sure where they are at the moment. someday ill make
+	this version better (when i decide that rdbms' don't suck)
+
