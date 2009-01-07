@@ -37,7 +37,10 @@ class ModeButton(gtk.EventBox):
 
     def __init__(self):
         gtk.EventBox.__init__(self)
-        self.add_events(gtk.gdk.POINTER_MOTION_MASK|gtk.gdk.BUTTON_PRESS_MASK)
+        self.add_events(gtk.gdk.POINTER_MOTION_MASK |
+                        gtk.gdk.BUTTON_PRESS_MASK |
+                        gtk.gdk.VISIBILITY_NOTIFY_MASK)
+        self.connect('visibility-notify-event', lambda *_: self.queue_draw())
 
         self.box = gtk.HBox(True, 6)
         self.box.set_border_width(6)
