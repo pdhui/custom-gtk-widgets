@@ -35,6 +35,7 @@ main (gint argc, gchar *argv[])
 	GtkWidget *page1;
 	GtkWidget *page2;
 	GtkWidget *hour, *day, *week, *month, *year;
+	GtkWidget *btn;
 	
 	gtk_init (&argc, &argv);
 	
@@ -58,12 +59,15 @@ main (gint argc, gchar *argv[])
 	week = gtk_label_new ("Week");
 	month = gtk_label_new ("Month");
 	year = gtk_label_new ("Year");
+
+	btn = gtk_button_new_from_stock (GTK_STOCK_OPEN);
 	
 	gtk_mode_button_append (GTK_MODE_BUTTON (mode_button), hour);
 	gtk_mode_button_append (GTK_MODE_BUTTON (mode_button), day);
 	gtk_mode_button_append (GTK_MODE_BUTTON (mode_button), week);
 	gtk_mode_button_append (GTK_MODE_BUTTON (mode_button), month);
 	gtk_mode_button_append (GTK_MODE_BUTTON (mode_button), year);
+	gtk_mode_button_append_button (GTK_MODE_BUTTON (mode_button), btn);
 	
 	gtk_widget_show (hour);
 	gtk_widget_show (day);

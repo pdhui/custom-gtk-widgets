@@ -276,6 +276,25 @@ gtk_mode_button_append (GtkModeButton *mode_button, GtkWidget *widget)
 	return priv->n_children++;
 }
 
+gint
+gtk_mode_button_append_button (GtkModeButton *mode_button, GtkWidget *button)
+{
+    gint ret;
+    GtkWidget *btnchild;
+
+    g_return_val_if_fail (GTK_IS_BUTTON(button), -1);
+    btnchild = gtk_bin_get_child (GTK_BIN (button));
+    /* ref the child so it stays alive when remove from the button */
+    g_object_ref(btnchild);
+    gtk_container_remove (GTK_CONTAINER (button), btnchild);
+
+    ret = gtk_mode_button_append (mode_button, btnchild);
+    /* remove the ref, we took ownership when we added it to priv->box */
+    g_object_unref(btnchild);
+    return ret;
+}
+
+
 void
 gtk_mode_button_remove (GtkModeButton *mode_button, gint index)
 {

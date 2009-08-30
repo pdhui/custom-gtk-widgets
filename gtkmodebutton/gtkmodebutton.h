@@ -67,6 +67,7 @@ void       gtk_mode_button_set_selected (GtkModeButton *mode_button, gint index)
 gint       gtk_mode_button_get_hovered  (GtkModeButton *mode_button);
 
 gint       gtk_mode_button_append       (GtkModeButton *mode_button, GtkWidget *widget);
+gint       gtk_mode_button_append_button (GtkModeButton *mode_button, GtkWidget *button);
 void       gtk_mode_button_remove       (GtkModeButton *mode_button, gint index);
 
 G_END_DECLS
