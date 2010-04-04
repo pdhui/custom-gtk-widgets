@@ -234,9 +234,9 @@ egg_panel_ebox_expose (GtkWidget      *ebox,
 	r1 = style->bg[state].red / 65535.;
 	g1 = style->bg[state].green / 65535.;
 	b1 = style->bg[state].blue / 65535.;
-	r2 = style->mid[state].red / 65535.;
-	g2 = style->mid[state].green / 65535.;
-	b2 = style->mid[state].blue / 65535.;
+	r2 = style->dark[state].red / 65535.;
+	g2 = style->dark[state].green / 65535.;
+	b2 = style->dark[state].blue / 65535.;
 
 	/*
 	 * Draw the background gradient.
