@@ -71,11 +71,16 @@ egg_panel_set_title (EggPanel    *panel,
                      const gchar *title)
 {
 	EggPanelPrivate *priv;
+	gchar *markup;
 
 	g_return_if_fail(EGG_IS_PANEL(panel));
 
 	priv = panel->priv;
-	gtk_label_set_text(GTK_LABEL(priv->title), title);
+
+	markup = g_strdup_printf("<span size=\"smaller\" weight=\"bold\">%s</span>",
+	                         title);
+	gtk_label_set_markup(GTK_LABEL(priv->title), markup);
+	g_free(markup);
 }
 
 static inline EggPanel*
