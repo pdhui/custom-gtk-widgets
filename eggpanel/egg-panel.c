@@ -394,6 +394,7 @@ egg_panel_init (EggPanel *panel)
 	 */
 	panel->priv->title = gtk_label_new(NULL);
 	gtk_misc_set_alignment(GTK_MISC(panel->priv->title), 0., .5);
+	gtk_misc_set_padding(GTK_MISC(panel->priv->title), 3, 1);
 	gtk_box_pack_start(GTK_BOX(panel->priv->header),
 	                   panel->priv->title, TRUE, TRUE, 0);
 	gtk_widget_show(panel->priv->title);
