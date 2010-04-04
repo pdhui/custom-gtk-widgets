@@ -11,7 +11,7 @@ main (gint   argc,
 	gtk_init(&argc, &argv);
 
 	panel1 = egg_panel_new();
-	egg_panel_set_title(EGG_PANEL(panel1), "Panel 1");
+	egg_panel_set_title(EGG_PANEL(panel1), "Sources");
 	gtk_widget_show(panel1);
 
 	gtk_main();
