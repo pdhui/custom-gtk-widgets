@@ -141,6 +141,7 @@ egg_panel_transition (EggPanel *panel,
 			 * TODO: If not the owner of current toplevel, we need to
 			 *       remove and add to its own toplevel.
 			 */
+			gtk_widget_queue_draw(priv->ebox);
 			break;
 		}
 		case STATE_BLURING: {
@@ -170,6 +171,7 @@ egg_panel_transition (EggPanel *panel,
 			 */
 			return;
 		case STATE_DOCKED:
+			gtk_widget_queue_draw(priv->ebox);
 			break;
 		default:
 			ASSERT_INVALID_TRANSITION;
