@@ -173,6 +173,8 @@ egg_panel_transition (EggPanel *panel,
 		case STATE_DOCKED:
 			gtk_widget_queue_draw(priv->ebox);
 			break;
+		case STATE_DRAGGING:
+			break;
 		default:
 			ASSERT_INVALID_TRANSITION;
 		}
