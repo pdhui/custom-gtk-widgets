@@ -56,9 +56,10 @@ struct _EggPanelPrivate
 	gint       state;
 	EggPanel  *group;
 	GtkWidget *toplevel;
-
+	GtkWidget *child;
 	GtkWidget *header;
 	GtkWidget *title;
+	GtkWidget *arrow;
 };
 
 static const gchar* states[] = {
@@ -107,6 +108,7 @@ egg_panel_transition (EggPanel *panel,
 				gtk_window_set_decorated(GTK_WINDOW(priv->toplevel), FALSE);
 				gtk_window_set_skip_pager_hint(GTK_WINDOW(priv->toplevel), TRUE);
 				gtk_window_set_skip_taskbar_hint(GTK_WINDOW(priv->toplevel), TRUE);
+				gtk_window_set_default_size(GTK_WINDOW(priv->toplevel), 1, 1);
 				child = gtk_vbox_new(FALSE, 0);
 				gtk_container_add(GTK_CONTAINER(priv->toplevel), child);
 				gtk_box_pack_start(GTK_BOX(child), GTK_WIDGET(panel),
@@ -241,6 +243,7 @@ static void
 egg_panel_add (GtkContainer *container,
                GtkWidget    *child)
 {
+	EGG_PANEL(container)->priv->child = child;
 	gtk_box_pack_start(GTK_BOX(container), child, TRUE, TRUE, 0);
 }
 
@@ -321,7 +324,35 @@ egg_panel_ebox_button_press (GtkWidget      *ebox,
                              GdkEventButton *event,
                              EggPanel       *panel)
 {
+	GtkAllocation alloc;
+	GtkWidget *arrow;
+	GtkArrowType type;
+
 	if (event->button == 1) {
+		gtk_widget_get_allocation(panel->priv->arrow, &alloc);
+
+		if (event->x >= alloc.x && event->x <= (alloc.x + alloc.width)) {
+			if (event->y >= alloc.y && event->y <= (alloc.y + alloc.height)) {
+				GtkWidget *child;
+
+				/*
+				 * Handle clicks within the arrow area.
+				 */
+				arrow = panel->priv->arrow;
+				g_object_get(arrow, "arrow-type", &type, NULL);
+				type = (type == GTK_ARROW_DOWN) ? GTK_ARROW_RIGHT : GTK_ARROW_DOWN;
+				g_object_set(arrow, "arrow-type", type, NULL);
+
+				/*
+				 * TODO: Animate Expanding/Collapsing.
+				 */
+				child = panel->priv->child;
+				gtk_widget_set_visible(child, (type == GTK_ARROW_DOWN));
+
+				return FALSE;
+			}
+		}
+
 		egg_panel_transition(panel, STATE_DRAGGING);
 		gtk_window_begin_move_drag(GTK_WINDOW(panel->priv->toplevel),
 		                           event->button,
@@ -387,7 +418,7 @@ egg_panel_class_init (EggPanelClass *klass)
 static void
 egg_panel_init (EggPanel *panel)
 {
-	GtkWidget *ebox, *arrow;
+	GtkWidget *ebox;
 
 	panel->priv = G_TYPE_INSTANCE_GET_PRIVATE(panel,
 	                                          EGG_TYPE_PANEL,
@@ -404,7 +435,7 @@ egg_panel_init (EggPanel *panel)
 	ebox = gtk_event_box_new();
 	panel->priv->header = gtk_hbox_new(FALSE, 0);
 	panel->priv->title = gtk_label_new(NULL);
-	arrow = gtk_arrow_new(GTK_ARROW_DOWN, GTK_SHADOW_NONE);
+	panel->priv->arrow = gtk_arrow_new(GTK_ARROW_DOWN, GTK_SHADOW_NONE);
 
 	/*
 	 * Modify widget properties.
@@ -412,14 +443,15 @@ egg_panel_init (EggPanel *panel)
 	gtk_misc_set_padding(GTK_MISC(panel->priv->title), 6, 3);
 	gtk_misc_set_alignment(GTK_MISC(panel->priv->title), 0., .5);
 	gtk_widget_set_app_paintable(ebox, TRUE);
-	gtk_misc_set_padding(GTK_MISC(arrow), 1, 0);
+	gtk_misc_set_padding(GTK_MISC(panel->priv->arrow), 1, 0);
 
 	/*
 	 * Pack children widgets.
 	 */
 	gtk_box_pack_start(GTK_BOX(panel), ebox, FALSE, TRUE, 0);
 	gtk_container_add(GTK_CONTAINER(ebox), panel->priv->header);
-	gtk_box_pack_start(GTK_BOX(panel->priv->header), arrow, FALSE, TRUE, 0);
+	gtk_box_pack_start(GTK_BOX(panel->priv->header), panel->priv->arrow,
+	                   FALSE, TRUE, 0);
 	gtk_box_pack_start(GTK_BOX(panel->priv->header), panel->priv->title,
 	                   TRUE, TRUE, 0);
 
@@ -436,7 +468,7 @@ egg_panel_init (EggPanel *panel)
 	 */
 	gtk_widget_show(panel->priv->title);
 	gtk_widget_show(panel->priv->header);
-	gtk_widget_show(arrow);
+	gtk_widget_show(panel->priv->arrow);
 	gtk_widget_show(ebox);
 	
 }
