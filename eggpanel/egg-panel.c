@@ -28,184 +28,229 @@
 
 G_DEFINE_TYPE(EggPanel, egg_panel, GTK_TYPE_VBOX)
 
+static gboolean egg_panel_toplevel_configure (GtkWidget         *toplevel,
+                                              GdkEventConfigure *event,
+                                              EggPanel          *panel);
+static gboolean egg_panel_toplevel_focus_in  (GtkWidget         *toplevel,
+                                              GdkEventFocus     *event,
+                                              EggPanel          *panel);
+static gboolean egg_panel_toplevel_focus_out (GtkWidget         *toplevel,
+                                              GdkEventFocus     *event,
+                                              EggPanel          *panel);
+
+enum
+{
+	STATE_INITIAL,
+	STATE_DOCKED,
+	STATE_DRAGGING,
+	STATE_SNAPPING,
+	STATE_FOCUSING,
+	STATE_BLURING,
+	STATE_EXPANDING,
+	STATE_CONTRACTING,
+	STATE_LAST
+};
+
 struct _EggPanelPrivate
 {
-	GtkWidget *toplevel;
+	gint       state;
 	EggPanel  *group;
-	gboolean   has_child;
-	gboolean   pressed;
+	GtkWidget *toplevel;
 
 	GtkWidget *header;
 	GtkWidget *title;
-	GtkWidget *ebox;
 };
 
-static GtkWidget* egg_panel_get_toplevel (EggPanel *panel);
+static const gchar* states[] = {
+	"INITIAL",
+	"DOCKED",
+	"DRAGGING",
+	"SNAPPING",
+	"FOCUSING",
+	"BLURING",
+	"EXPANDING",
+	"CONTRACTING",
+};
 
-/**
- * egg_panel_new:
- *
- * Creates a new instance of #EggPanel.
- *
- * Returns: the newly created instance of #EggPanel.
- * Side effects: None.
- */
-GtkWidget*
-egg_panel_new (void)
-{
-	return g_object_new(EGG_TYPE_PANEL, NULL);
-}
-
-/**
- * egg_pannel_set_title:
- * @panel: An #EggPanel.
- * @title: The title.
- *
- * Sets the title of the panel.
- *
- * Returns: None.
- * Side effects: None.
- */
-void
-egg_panel_set_title (EggPanel    *panel,
-                     const gchar *title)
+static void
+egg_panel_transition (EggPanel *panel,
+                      guint     state)
 {
 	EggPanelPrivate *priv;
-	gchar *markup;
+	gint current;
 
 	g_return_if_fail(EGG_IS_PANEL(panel));
+	g_return_if_fail(state < STATE_LAST);
 
 	priv = panel->priv;
+	current = priv->state;
 
-	markup = g_strdup_printf("<span size=\"smaller\" weight=\"bold\">%s</span>",
-	                         title);
-	gtk_label_set_markup(GTK_LABEL(priv->title), markup);
-	g_free(markup);
-}
+	#define ASSERT_INVALID_TRANSITION G_STMT_START {            \
+	    g_error("EggPanel: invalid state transition: %s => %s", \
+	            states[current], states[state]);                \
+	} G_STMT_END
 
-static inline EggPanel*
-egg_panel_get_group (EggPanel *panel)
-{
-	EggPanelPrivate *priv = panel->priv;
-	return (priv->group == NULL) ? panel : priv->group;
-}
+	#define SET_STATE(s) G_STMT_START {                         \
+	    g_message("EggPanel: state transition %s => %s",        \
+	              states[current], states[state]);              \
+	    priv->state = (s);                                      \
+	} G_STMT_END
 
-static gboolean
-egg_panel_toplevel_expose (GtkWidget      *widget,
-                           GdkEventExpose *event,
-                           EggPanel       *panel)
-{
-	GdkRectangle alloc;
-	gint x, y;
+	switch (current) {
+	case STATE_INITIAL:
+		switch (state) {
+		case STATE_DOCKED: {
+			if (!priv->group) {
+				GtkWidget *child;
 
-	gtk_widget_get_allocation(widget, &alloc);
-	x = alloc.width - 17;
-	y = alloc.height - 17;
-
-	/*
-	 * Expose child.
-	 */
-	gtk_container_propagate_expose(GTK_CONTAINER(widget),
-	                               gtk_bin_get_child(GTK_BIN(widget)),
-	                               event);
-
-	/*
-	 * Expose resize grip.
-	 */
-	gtk_paint_resize_grip(gtk_widget_get_style(widget),
-	                      event->window,
-	                      GTK_STATE_ACTIVE,
-	                      &alloc,
-	                      widget,
-	                      "",
-	                      GDK_WINDOW_EDGE_SOUTH_EAST,
-	                      x, y, 15, 15);
-
-	return FALSE;
-}
-
-static gboolean
-egg_panel_toplevel_configure (GtkWidget         *ebox,
-                              GdkEventConfigure *event,
-                              EggPanel          *panel)
-{
-	EggPanelPrivate *priv = panel->priv;
-	GtkWidget *toplevel;
-
-	priv->pressed = FALSE;
-	toplevel = egg_panel_get_toplevel(panel);
-
-	gtk_window_set_opacity(GTK_WINDOW(toplevel), 1.);
-
-	gtk_widget_queue_draw(ebox);
-
-	return FALSE;
-}
-
-static inline GtkWidget*
-egg_panel_get_toplevel (EggPanel *panel)
-{
-	EggPanel *group;
-	GtkWidget *toplevel;
-	GtkWidget *box;
-
-	/*
-	 * Get the panel group.
-	 */
-	group = egg_panel_get_group(panel);
-	g_assert(group);
-
-	/*
-	 * If there is not yet a toplevel window, go ahead and
-	 * create it.
-	 */
-	toplevel = group->priv->toplevel;
-	if (!toplevel) {
-		group->priv->toplevel = toplevel = gtk_window_new(GTK_WINDOW_TOPLEVEL);
-		gtk_window_set_decorated(GTK_WINDOW(toplevel), FALSE);
-		gtk_window_set_skip_taskbar_hint(GTK_WINDOW(toplevel), TRUE);
-		gtk_window_set_skip_pager_hint(GTK_WINDOW(toplevel), TRUE);
-		gtk_widget_set_app_paintable(toplevel, TRUE);
-		box = gtk_vbox_new(FALSE, 0);
-		gtk_container_add(GTK_CONTAINER(toplevel), box);
-		gtk_widget_show(box);
-
-		/*
-		 * Attach window signals.
-		 *
-		 * TODO: Remove callback when group removed from toplevel.
-		 */
-		g_signal_connect(toplevel,
-		                 "expose-event",
-		                 G_CALLBACK(egg_panel_toplevel_expose),
-		                 group);
-		g_signal_connect(toplevel,
-		                 "configure-event",
-		                 G_CALLBACK(egg_panel_toplevel_configure),
-		                 group);
+				priv->toplevel = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+				gtk_window_set_decorated(GTK_WINDOW(priv->toplevel), FALSE);
+				gtk_window_set_skip_pager_hint(GTK_WINDOW(priv->toplevel), TRUE);
+				gtk_window_set_skip_taskbar_hint(GTK_WINDOW(priv->toplevel), TRUE);
+				child = gtk_vbox_new(FALSE, 0);
+				gtk_container_add(GTK_CONTAINER(priv->toplevel), child);
+				gtk_box_pack_start(GTK_BOX(child), GTK_WIDGET(panel),
+				                   TRUE, TRUE, 0);
+				gtk_widget_show(child);
+				g_signal_connect(priv->toplevel,
+				                 "configure-event",
+				                 G_CALLBACK(egg_panel_toplevel_configure),
+				                 panel);
+				g_signal_connect(priv->toplevel,
+				                 "focus-in-event",
+				                 G_CALLBACK(egg_panel_toplevel_focus_in),
+				                 panel);
+				g_signal_connect(priv->toplevel,
+				                 "focus-out-event",
+				                 G_CALLBACK(egg_panel_toplevel_focus_out),
+				                 panel);
+			}
+			break;
+		}
+		default:
+			ASSERT_INVALID_TRANSITION;
+		}
+		break;
+	case STATE_DOCKED:
+		switch (state) {
+		case STATE_DRAGGING: {
+			/*
+			 * TODO: If not the owner of current toplevel, we need to
+			 *       remove and add to its own toplevel.
+			 */
+			break;
+		}
+		case STATE_BLURING: {
+			gtk_window_set_opacity(GTK_WINDOW(priv->toplevel), .5);
+			/*
+			 * Don't allow state to change.
+			 */
+			return;
+		}
+		case STATE_FOCUSING: {
+			gtk_window_set_opacity(GTK_WINDOW(priv->toplevel), 1.);
+			/*
+			 * Don't allow state to change.
+			 */
+			return;
+		}
+		default:
+			ASSERT_INVALID_TRANSITION;
+		}
+		break;
+	case STATE_DRAGGING:
+		switch (state) {
+		case STATE_BLURING:
+			gtk_window_set_opacity(GTK_WINDOW(priv->toplevel), 1.);
+			/*
+			 * Don't allow state to change.
+			 */
+			return;
+		case STATE_DOCKED:
+			break;
+		default:
+			ASSERT_INVALID_TRANSITION;
+		}
+		break;
+	case STATE_SNAPPING:
+		switch (state) {
+		default:
+			ASSERT_INVALID_TRANSITION;
+		}
+		break;
+	case STATE_FOCUSING:
+		switch (state) {
+		case STATE_DOCKED:
+			if (priv->toplevel) {
+				gtk_window_set_opacity(GTK_WINDOW(priv->toplevel), 1.);
+			}
+			egg_panel_transition(panel, STATE_DOCKED);
+			break;
+		default:
+			ASSERT_INVALID_TRANSITION;
+		}
+		break;
+	case STATE_BLURING:
+		switch (state) {
+		case STATE_DOCKED:
+			if (priv->toplevel) {
+				gtk_window_set_opacity(GTK_WINDOW(priv->toplevel), .5);
+			}
+			egg_panel_transition(panel, STATE_DOCKED);
+			break;
+		default:
+			ASSERT_INVALID_TRANSITION;
+		}
+		break;
+	case STATE_EXPANDING:
+		switch (state) {
+		default:
+			ASSERT_INVALID_TRANSITION;
+		}
+		break;
+	case STATE_CONTRACTING:
+		switch (state) {
+		default:
+			ASSERT_INVALID_TRANSITION;
+		}
+		break;
+	default:
+		g_assert_not_reached();
 	}
 
-	g_assert(toplevel);
-	return toplevel;
+	SET_STATE(state);
 }
 
 static void
-egg_panel_add (GtkContainer *panel,
-               GtkWidget    *child)
+egg_panel_show (GtkWidget *widget)
 {
-	EggPanelPrivate *priv;
+	EggPanelPrivate *priv = EGG_PANEL(widget)->priv;
 
-	g_return_if_fail(EGG_IS_PANEL(panel));
-
-	priv = EGG_PANEL(panel)->priv;
-
-	if (priv->has_child) {
-		g_warning("EggPanel only supports a single child.");
-		return;
+	if (priv->state != STATE_DOCKED) {
+		egg_panel_transition(EGG_PANEL(widget), STATE_DOCKED);
 	}
 
-	gtk_box_pack_start(GTK_BOX(panel), child, TRUE, TRUE, 0);
-	priv->has_child = TRUE;
+	if (priv->toplevel) {
+		gtk_widget_show(priv->toplevel);
+	}
+
+	GTK_WIDGET_CLASS(egg_panel_parent_class)->show(widget);
+}
+
+static void
+egg_panel_add (GtkContainer *container,
+               GtkWidget    *child)
+{
+	gtk_box_pack_start(GTK_BOX(container), child, TRUE, TRUE, 0);
+}
+
+static gboolean
+egg_panel_toplevel_focus_out (GtkWidget     *widget,
+                              GdkEventFocus *event,
+                              EggPanel      *panel)
+{
+	egg_panel_transition(panel, STATE_BLURING);
+	return FALSE;
 }
 
 static gboolean
@@ -213,6 +258,7 @@ egg_panel_ebox_expose (GtkWidget      *ebox,
                        GdkEventExpose *event,
                        EggPanel       *panel)
 {
+	EggPanelPrivate *priv = panel->priv;
 	GdkRectangle alloc;
 	cairo_pattern_t *pt;
 	cairo_t *cr;
@@ -223,7 +269,7 @@ egg_panel_ebox_expose (GtkWidget      *ebox,
 	/*
 	 * Determine state from button press.
 	 */
-	state = panel->priv->pressed ? GTK_STATE_SELECTED : GTK_STATE_NORMAL;
+	state = (priv->state == STATE_DRAGGING) ? GTK_STATE_SELECTED : GTK_STATE_NORMAL;
 
 	/*
 	 * Create cairo context and clip drawing area to event region.
@@ -270,83 +316,54 @@ egg_panel_ebox_expose (GtkWidget      *ebox,
 	return FALSE;
 }
 
-static void
+static gboolean
 egg_panel_ebox_button_press (GtkWidget      *ebox,
                              GdkEventButton *event,
                              EggPanel       *panel)
 {
-	EggPanelPrivate *priv = panel->priv;
-	GtkWidget *toplevel;
-	EggPanel *group;
-
-	priv->pressed = TRUE;
-	group = egg_panel_get_group(panel);
-	toplevel = egg_panel_get_toplevel(panel);
-
-	/*
-	 * Start a move-drag on the toplevel window since we are trying to move
-	 * the entire thing.
-	 */
-	if (group == panel) {
-		gtk_window_set_opacity(GTK_WINDOW(toplevel), .5);
-		gtk_window_begin_move_drag(GTK_WINDOW(toplevel),
+	if (event->button == 1) {
+		egg_panel_transition(panel, STATE_DRAGGING);
+		gtk_window_begin_move_drag(GTK_WINDOW(panel->priv->toplevel),
 		                           event->button,
-		                           event->x_root,
-		                           event->y_root,
+		                           event->x_root, event->y_root,
 		                           event->time);
 	}
 
-	gtk_widget_queue_draw(ebox);
+	return FALSE;
 }
 
-static void
-egg_panel_ebox_button_release (GtkWidget      *ebox,
-                               GdkEventButton *event,
-                               EggPanel       *panel)
+static gboolean
+egg_panel_toplevel_configure (GtkWidget         *toplevel,
+                              GdkEventConfigure *event,
+                              EggPanel          *panel)
 {
-	EggPanelPrivate *priv = panel->priv;
-
-	priv->pressed = FALSE;
-
-	gtk_widget_queue_draw(ebox);
-}
-
-static void
-egg_panel_show (GtkWidget *panel)
-{
-	GtkWidget *toplevel;
-	GtkWidget *box;
-
-	/*
-	 * Make sure the toplevel window is visible.
-	 */
-	toplevel = egg_panel_get_toplevel(EGG_PANEL(panel));
-	gtk_widget_show_all(toplevel);
-
-	/*
-	 * If we haven't yet been added to the toplevel, add ourselves.
-	 */
-	if (!gtk_widget_get_parent(panel)) {
-		box = gtk_bin_get_child(GTK_BIN(toplevel));
-		gtk_box_pack_start(GTK_BOX(box), panel, FALSE, TRUE, 0);
+	if (panel->priv->state == STATE_DRAGGING) {
+		egg_panel_transition(panel, STATE_DOCKED);
 	}
 
+	return FALSE;
+}
+
+static gboolean
+egg_panel_toplevel_focus_in (GtkWidget     *toplevel,
+                             GdkEventFocus *event,
+                             EggPanel      *panel)
+{
 	/*
-	 * Show ourself.
+	 * Check if we just came out of a drag event.
 	 */
-	GTK_WIDGET_CLASS(egg_panel_parent_class)->show(panel);
+	if (panel->priv->state == STATE_DRAGGING) {
+		egg_panel_transition(panel, STATE_DOCKED);
+	}
+	egg_panel_transition(panel, STATE_FOCUSING);
+
+	return FALSE;
 }
 
 static void
 egg_panel_finalize (GObject *object)
 {
 	G_OBJECT_CLASS(egg_panel_parent_class)->finalize(object);
-}
-
-static void
-egg_panel_dispose (GObject *object)
-{
-	G_OBJECT_CLASS(egg_panel_parent_class)->dispose(object);
 }
 
 static void
@@ -358,7 +375,6 @@ egg_panel_class_init (EggPanelClass *klass)
 
 	object_class = G_OBJECT_CLASS(klass);
 	object_class->finalize = egg_panel_finalize;
-	object_class->dispose = egg_panel_dispose;
 	g_type_class_add_private(object_class, sizeof(EggPanelPrivate));
 
 	widget_class = GTK_WIDGET_CLASS(klass);
@@ -371,47 +387,95 @@ egg_panel_class_init (EggPanelClass *klass)
 static void
 egg_panel_init (EggPanel *panel)
 {
-	panel->priv = G_TYPE_INSTANCE_GET_PRIVATE(panel, EGG_TYPE_PANEL,
+	GtkWidget *ebox, *arrow;
+
+	panel->priv = G_TYPE_INSTANCE_GET_PRIVATE(panel,
+	                                          EGG_TYPE_PANEL,
 	                                          EggPanelPrivate);
 
 	/*
-	 * Create the event box for the header background.
+	 * Set default state.
 	 */
-	panel->priv->ebox = gtk_event_box_new();
-	gtk_widget_set_app_paintable(panel->priv->ebox, TRUE);
-	gtk_box_pack_start(GTK_BOX(panel), panel->priv->ebox, FALSE, TRUE, 0);
-	gtk_widget_show(panel->priv->ebox);
+	panel->priv->state = STATE_INITIAL;
 
 	/*
-	 * Create the header box.
+	 * Create required children widgets.
 	 */
+	ebox = gtk_event_box_new();
 	panel->priv->header = gtk_hbox_new(FALSE, 0);
-	gtk_container_add(GTK_CONTAINER(panel->priv->ebox), panel->priv->header);
-	gtk_widget_show(panel->priv->header);
-
-	/*
-	 * Create the title label.
-	 */
 	panel->priv->title = gtk_label_new(NULL);
-	gtk_misc_set_alignment(GTK_MISC(panel->priv->title), 0., .5);
-	gtk_misc_set_padding(GTK_MISC(panel->priv->title), 3, 1);
-	gtk_box_pack_start(GTK_BOX(panel->priv->header),
-	                   panel->priv->title, TRUE, TRUE, 0);
-	gtk_widget_show(panel->priv->title);
+	arrow = gtk_arrow_new(GTK_ARROW_DOWN, GTK_SHADOW_NONE);
 
 	/*
-	 * Attach signals.
+	 * Modify widget properties.
 	 */
-	g_signal_connect(panel->priv->ebox,
-	                 "expose-event",
-	                 G_CALLBACK(egg_panel_ebox_expose),
-	                 panel);
-	g_signal_connect(panel->priv->ebox,
-	                 "button-press-event",
-	                 G_CALLBACK(egg_panel_ebox_button_press),
-	                 panel);
-	g_signal_connect(panel->priv->ebox,
-	                 "button-release-event",
-	                 G_CALLBACK(egg_panel_ebox_button_release),
-	                 panel);
+	gtk_misc_set_padding(GTK_MISC(panel->priv->title), 6, 3);
+	gtk_misc_set_alignment(GTK_MISC(panel->priv->title), 0., .5);
+	gtk_widget_set_app_paintable(ebox, TRUE);
+	gtk_misc_set_padding(GTK_MISC(arrow), 1, 0);
+
+	/*
+	 * Pack children widgets.
+	 */
+	gtk_box_pack_start(GTK_BOX(panel), ebox, FALSE, TRUE, 0);
+	gtk_container_add(GTK_CONTAINER(ebox), panel->priv->header);
+	gtk_box_pack_start(GTK_BOX(panel->priv->header), arrow, FALSE, TRUE, 0);
+	gtk_box_pack_start(GTK_BOX(panel->priv->header), panel->priv->title,
+	                   TRUE, TRUE, 0);
+
+	/*
+	 * Attach signal handlers.
+	 */
+	g_signal_connect(ebox, "expose-event",
+	                 G_CALLBACK(egg_panel_ebox_expose), panel);
+	g_signal_connect(ebox, "button-press-event",
+	                 G_CALLBACK(egg_panel_ebox_button_press), panel);
+
+	/*
+	 * Show chlidren widgets.
+	 */
+	gtk_widget_show(panel->priv->title);
+	gtk_widget_show(panel->priv->header);
+	gtk_widget_show(arrow);
+	gtk_widget_show(ebox);
+	
+}
+
+/**
+ * egg_panel_new:
+ *
+ * Creates a new instance of #EggPanel.
+ *
+ * Returns: the newly created instance of #EggPanel.
+ * Side effects: None.
+ */
+GtkWidget*
+egg_panel_new (void)
+{
+	return g_object_new(EGG_TYPE_PANEL, NULL);
+}
+
+/**
+ * egg_panel_set_title:
+ * @panel: An #EggPanel.
+ * @title: The panel title.
+ *
+ * Sets the title of the panel.
+ *
+ * Returns: None.
+ * Side effects: None.
+ */
+void
+egg_panel_set_title (EggPanel    *panel,
+                     const gchar *title)
+{
+	gchar *markup;
+
+	g_return_if_fail(EGG_IS_PANEL(panel));
+	g_return_if_fail(title != NULL);
+
+	markup = g_strdup_printf("<span size=\"smaller\" weight=\"bold\">%s</span>",
+	                         title);
+	gtk_label_set_markup(GTK_LABEL(panel->priv->title), markup);
+	g_free(markup);
 }
