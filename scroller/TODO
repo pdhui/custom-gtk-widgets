@@ -10,4 +10,7 @@
    gtkeventbox has an example of how to do this. this way, we can cache
    the rectangle for the current position of the scrollbar, and when the
    mouse hovers over it, allow clicking to drag-scroll.
+ * Don't fade scrollbars out if in a pointer grab.
+ * Need to determine now much gdk_window_move was by, so that we can invalid
+   the existing area for the scrollbar.
 
