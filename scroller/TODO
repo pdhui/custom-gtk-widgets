@@ -1,0 +1,13 @@
+ * Code is ugly.
+ * HScrollbar not implemented at all yet.
+ * round the top and bottom of the scrollbars.
+ * vscrollbar shouldn't reach to the bottom if hscrolling is needed
+   (so they dont overlap. gtkscrolledwindow leaves a rectangle in the
+   corner).
+ * sometimes the fade in/out animations are clobbering or something and
+   making the scrollbar disappear.
+ * we should use an input only window for input actions above the child.
+   gtkeventbox has an example of how to do this. this way, we can cache
+   the rectangle for the current position of the scrollbar, and when the
+   mouse hovers over it, allow clicking to drag-scroll.
+
