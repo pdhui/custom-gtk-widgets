@@ -28,7 +28,12 @@ struct _GbScrolledWindowPrivate
    GdkWindow *window;
 
    GtkAdjustment *hadj;
+   GbAnimation *hadj_anim;
+   gdouble hadj_target;
+
    GtkAdjustment *vadj;
+   GbAnimation *vadj_anim;
+   gdouble vadj_target;
 
    GtkAdjustment *opacity;
    GbAnimation *opacity_anim;
@@ -291,7 +296,10 @@ gb_scrolled_window_scroll_event (GtkWidget      *widget,
 {
    GbScrolledWindowPrivate *priv;
    GtkAdjustment *adj;
+   GbAnimation **anim = NULL;
    gdouble delta;
+   gdouble value = 0;
+   gdouble *target = NULL;
 
    g_return_val_if_fail(GTK_IS_WIDGET(widget), FALSE);
    g_return_val_if_fail(event != NULL, FALSE);
@@ -300,13 +308,30 @@ gb_scrolled_window_scroll_event (GtkWidget      *widget,
 
    if ((event->direction == GDK_SCROLL_UP) || (event->direction == GDK_SCROLL_DOWN)) {
       adj = priv->vadj;
+      anim = &priv->vadj_anim;
+      target = &priv->vadj_target;
    } else {
       adj = priv->hadj;
+      anim = &priv->hadj_anim;
+      target = &priv->hadj_target;
    }
 
    delta = gb_scrolled_window_get_wheel_delta(adj, event->direction);
+   value = gtk_adjustment_get_value(adj);
 
-   gtk_adjustment_set_value(adj, gtk_adjustment_get_value(adj) + delta);
+   if (*anim) {
+      g_object_remove_weak_pointer(G_OBJECT(*anim), (gpointer *)anim);
+      gb_animation_stop(*anim);
+      *anim = NULL;
+      value = *target;
+   }
+
+   value += delta;
+   *anim = gb_object_animate(adj, GB_ANIMATION_EASE_OUT_QUAD, 200,
+                             "value", value,
+                             NULL);
+   g_object_add_weak_pointer(G_OBJECT(*anim), (gpointer *)anim);
+   *target = value;
 
    return TRUE;
 }
