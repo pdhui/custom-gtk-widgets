@@ -1,5 +1,20 @@
 #include <gtk/gtk.h>
+
+#include "gb-animation.h"
 #include "gb-scrolled-window.h"
+
+static gboolean
+scroll_to_middle (gpointer user_data)
+{
+   GtkAdjustment *adj = gtk_scrollable_get_vadjustment(user_data);
+   gdouble upper = gtk_adjustment_get_upper(adj);
+
+   gb_object_animate(adj, GB_ANIMATION_EASE_IN_OUT_QUAD, 1500,
+                     "value", upper / 3.0,
+                     NULL);
+
+   return FALSE;
+}
 
 gint
 main (gint   argc,
@@ -37,6 +52,7 @@ main (gint   argc,
    g_signal_connect(window, "delete-event", gtk_main_quit, NULL);
    gtk_widget_show_all(GTK_WIDGET(window));
    gtk_window_present(window);
+   g_timeout_add(100, scroll_to_middle, textview);
    gtk_main();
    return 0;
 }
