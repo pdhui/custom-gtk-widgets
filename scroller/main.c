@@ -27,7 +27,7 @@ main (gint   argc,
    gtk_init(&argc, &argv);
    window = g_object_new(GTK_TYPE_WINDOW,
                          "border-width", 12,
-                         "default-width", 640,
+                         "default-width", 700,
                          "default-height", 480,
                          "title", "Test Window",
                          "window-position", GTK_WIN_POS_CENTER,

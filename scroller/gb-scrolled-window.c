@@ -52,6 +52,45 @@ enum
 
 //static GParamSpec *gParamSpecs[LAST_PROP];
 
+static void
+rounded_rectangle (cairo_t *cr,
+                   gint     x,
+                   gint     y,
+                   gint     width,
+                   gint     height,
+                   gint     x_radius,
+                   gint     y_radius)
+{
+  gint x1, x2;
+  gint y1, y2;
+  gint xr1, xr2;
+  gint yr1, yr2;
+
+  x1 = x;
+  x2 = x1 + width;
+  y1 = y;
+  y2 = y1 + height;
+
+  x_radius = MIN (x_radius, width / 2.0);
+  y_radius = MIN (y_radius, width / 2.0);
+
+  xr1 = x_radius;
+  xr2 = x_radius / 2.0;
+  yr1 = y_radius;
+  yr2 = y_radius / 2.0;
+
+  cairo_move_to    (cr, x1 + xr1, y1);
+  cairo_line_to    (cr, x2 - xr1, y1);
+  cairo_curve_to   (cr, x2 - xr2, y1, x2, y1 + yr2, x2, y1 + yr1);
+  cairo_line_to    (cr, x2, y2 - yr1);
+  cairo_curve_to   (cr, x2, y2 - yr2, x2 - xr2, y2, x2 - xr1, y2);
+  cairo_line_to    (cr, x1 + xr1, y2);
+  cairo_curve_to   (cr, x1 + xr2, y2, x1, y2 - yr2, x1, y2 - yr1);
+  cairo_line_to    (cr, x1, y1 + yr1);
+  cairo_curve_to   (cr, x1, y1 + yr2, x1 + xr2, y1, x1 + xr1, y1);
+  cairo_close_path (cr);
+}
+
 gboolean
 gb_scrolled_window_draw (GtkWidget *widget,
                          cairo_t   *cr,
@@ -93,9 +132,14 @@ gb_scrolled_window_draw (GtkWidget *widget,
       height = MAX(height, 20);
       ratio = (value - lower) / (upper - lower);
       y = ratio * (a.height - (2 * priv->sb_padding)) + priv->sb_padding;
-      cairo_rectangle(cr,
-                      a.width - 9 - priv->sb_padding,
-                      y, 9, height);
+
+      rounded_rectangle(cr,
+                        a.width - priv->sb_width - priv->sb_padding,
+                        y,
+                        priv->sb_width,
+                        height,
+                        priv->sb_width,
+                        priv->sb_width);
    }
 
    /*
@@ -120,10 +164,14 @@ gb_scrolled_window_draw (GtkWidget *widget,
       width = MAX(width, 20);
       ratio = (value - lower) / (upper - lower);
       x = ratio * (a.width - (2 * priv->sb_padding)) + priv->sb_padding;
-      cairo_rectangle(cr,
-                      x, a.height - 9 - priv->sb_padding,
-                      width, 9);
 
+      rounded_rectangle(cr,
+                        x,
+                        a.height - priv->sb_width - priv->sb_padding,
+                        width,
+                        priv->sb_width,
+                        priv->sb_radius,
+                        priv->sb_radius);
       }
    }
 
@@ -280,7 +328,7 @@ gb_scrolled_window_get_wheel_delta (GtkAdjustment      *adj,
 
    g_return_val_if_fail(GTK_IS_ADJUSTMENT(adj), 0.0);
 
-   delta = gtk_adjustment_get_step_increment(adj) * 2;
+   delta = gtk_adjustment_get_step_increment(adj) * (4.0/3.0);
 
    if ((direction == GDK_SCROLL_UP) ||
        (direction == GDK_SCROLL_LEFT)) {
@@ -332,6 +380,17 @@ gb_scrolled_window_scroll_event (GtkWidget      *widget,
                              NULL);
    g_object_add_weak_pointer(G_OBJECT(*anim), (gpointer *)anim);
    *target = value;
+
+   {
+      gdouble upper;
+      g_object_get(priv->opacity,
+                   "upper", &upper,
+                   "value", &value,
+                   NULL);
+      if (value < upper) {
+         g_object_set(priv->opacity, "value", upper, NULL);
+      }
+   }
 
    return TRUE;
 }
@@ -496,5 +555,5 @@ gb_scrolled_window_init (GbScrolledWindow *window)
    window->priv->sb_min_height = 20;
    window->priv->sb_padding = 5;
    window->priv->sb_radius = 5;
-   window->priv->sb_width = 10;
+   window->priv->sb_width = 4;
 }
