@@ -62,6 +62,8 @@ gb_scrolled_window_draw (GtkWidget *widget,
    gdouble ratio;
    gdouble height;
    gdouble y;
+   gdouble x;
+   gdouble width;
 
    priv = GB_SCROLLED_WINDOW(user_data)->priv;
 
@@ -71,24 +73,58 @@ gb_scrolled_window_draw (GtkWidget *widget,
                 "value", &opacity,
                 NULL);
 
+   /*
+    * Vertical scrolling.
+    */
    g_object_get(priv->vadj,
                 "lower", &lower,
                 "upper", &upper,
                 "value", &value,
                 "page-size", &page_size,
                 NULL);
-
    ratio = page_size / (upper - lower);
-   height = ratio * (a.height - (2 * priv->sb_padding));
-   height = MAX(height, 20);
+   if (ratio < 1.0) {
+      height = ratio * (a.height - (2 * priv->sb_padding));
+      height = MAX(height, 20);
+      ratio = (value - lower) / (upper - lower);
+      y = ratio * (a.height - (2 * priv->sb_padding)) + priv->sb_padding;
+      cairo_rectangle(cr,
+                      a.width - 9 - priv->sb_padding,
+                      y, 9, height);
+   }
 
-   ratio = (value - lower) / (upper - lower);
-   y = ratio * (a.height - (2 * priv->sb_padding)) + priv->sb_padding;
+   /*
+    * Horizontal scrolling.
+    */
+   g_object_get(priv->hadj,
+                "lower", &lower,
+                "upper", &upper,
+                "value", &value,
+                "page-size", &page_size,
+                NULL);
+   ratio = page_size / (upper - lower);
+   if (ratio < 1.0) {
+      if (FALSE) {
 
-   cairo_rectangle(cr,
-                   a.width - 9 - priv->sb_padding,
-                   y, 9, height);
+      /*
+       * TODO: Gotta figure out how to invalide the old area
+       *       for this to work well. the same problem with Vscrollbar
+       *       but is less noticable.
+       */
+      width = ratio * (a.width - (2 * priv->sb_padding));
+      width = MAX(width, 20);
+      ratio = (value - lower) / (upper - lower);
+      x = ratio * (a.width - (2 * priv->sb_padding)) + priv->sb_padding;
+      cairo_rectangle(cr,
+                      x, a.height - 9 - priv->sb_padding,
+                      width, 9);
 
+      }
+   }
+
+   /*
+    * Paint.
+    */
    cairo_set_source_rgba(cr, 0, 0, 0, opacity);
    cairo_fill(cr);
 
