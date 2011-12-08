@@ -130,7 +130,7 @@ gb_scrolled_window_enter_notify (GtkWidget        *widget,
    g_object_get(priv->opacity, "upper", &upper, NULL);
    priv->opacity_anim = gb_object_animate(priv->opacity,
                                           GB_ANIMATION_EASE_OUT_QUAD,
-                                          1000,
+                                          500,
                                           "value", upper,
                                           NULL);
    g_object_add_weak_pointer(G_OBJECT(priv->opacity_anim),
