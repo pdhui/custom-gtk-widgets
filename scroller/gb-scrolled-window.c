@@ -329,8 +329,8 @@ gb_scrolled_window_destroy (GtkWidget *widget)
 }
 
 static void
-gb_scrolled_window_vadj_changed (GtkAdjustment    *adj,
-                                 GbScrolledWindow *scroller)
+gb_scrolled_window_adj_changed (GtkAdjustment    *adj,
+                                GbScrolledWindow *scroller)
 {
    GtkAllocation alloc;
    GtkWidget *child;
@@ -346,6 +346,11 @@ gb_scrolled_window_vadj_changed (GtkAdjustment    *adj,
                                     0,
                                     20,
                                     alloc.height);
+         gtk_widget_queue_draw_area(child,
+                                    alloc.height - 20,
+                                    0,
+                                    alloc.width,
+                                    20);
       }
    }
 }
@@ -357,7 +362,7 @@ gb_scrolled_window_opacity_changed (GtkAdjustment    *adj,
    g_return_if_fail(GTK_IS_ADJUSTMENT(adj));
    g_return_if_fail(GB_IS_SCROLLED_WINDOW(window));
 
-   gb_scrolled_window_vadj_changed(window->priv->vadj, window);
+   gb_scrolled_window_adj_changed(window->priv->vadj, window);
 }
 
 static void
@@ -408,13 +413,23 @@ gb_scrolled_window_init (GbScrolledWindow *window)
                     "value-changed",
                     G_CALLBACK(gb_scrolled_window_opacity_changed),
                     window);
+
    g_signal_connect(window->priv->vadj,
                     "changed",
-                    G_CALLBACK(gb_scrolled_window_vadj_changed),
+                    G_CALLBACK(gb_scrolled_window_adj_changed),
                     window);
    g_signal_connect(window->priv->vadj,
                     "value-changed",
-                    G_CALLBACK(gb_scrolled_window_vadj_changed),
+                    G_CALLBACK(gb_scrolled_window_adj_changed),
+                    window);
+
+   g_signal_connect(window->priv->hadj,
+                    "changed",
+                    G_CALLBACK(gb_scrolled_window_adj_changed),
+                    window);
+   g_signal_connect(window->priv->hadj,
+                    "value-changed",
+                    G_CALLBACK(gb_scrolled_window_adj_changed),
                     window);
 
    window->priv->sb_min_height = 20;
