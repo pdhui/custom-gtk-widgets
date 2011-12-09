@@ -37,7 +37,7 @@ typedef struct _GbScrolledWindowPrivate GbScrolledWindowPrivate;
 
 struct _GbScrolledWindow
 {
-   GtkBin parent;
+   GtkEventBox parent;
 
    /*< private >*/
    GbScrolledWindowPrivate *priv;
@@ -45,7 +45,7 @@ struct _GbScrolledWindow
 
 struct _GbScrolledWindowClass
 {
-   GtkBinClass parent_class;
+   GtkEventBoxClass parent_class;
 };
 
 GType gb_scrolled_window_get_type (void) G_GNUC_CONST;

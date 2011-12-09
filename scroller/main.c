@@ -1,4 +1,5 @@
 #include <gtk/gtk.h>
+#include <clutter-gtk/clutter-gtk.h>
 
 #include "gb-animation.h"
 #include "gb-scrolled-window.h"
@@ -24,7 +25,7 @@ main (gint   argc,
    GtkWidget *scroller;
    GtkWidget *textview;
 
-   gtk_init(&argc, &argv);
+   gtk_clutter_init(&argc, &argv);
    window = g_object_new(GTK_TYPE_WINDOW,
                          "border-width", 12,
                          "default-width", 700,
