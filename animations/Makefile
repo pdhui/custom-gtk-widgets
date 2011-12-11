@@ -10,11 +10,19 @@ FILES = \
 	gb-timeout-interval.c \
 	gb-timeout-interval.h
 
+OBJECTS =
+OBJECTS += gb-animation.o
+OBJECTS += gb-frame-source.o
+OBJECTS += gb-timeout-interval.o
+
 animations: $(FILES) main.c
 	$(CC) -g -o $@ -Wall -Werror $(FILES) main.c $(shell pkg-config --cflags --libs $(PKGS))
 
-animbin: $(FILES) animbin.c gb-anim-bin.c gb-anim-bin.h
-	$(CC) -g -o $@ -Wall -Werror $(FILES) animbin.c gb-anim-bin.c $(shell pkg-config --cflags --libs $(PKGS))
+%.o: %.c %.h
+	$(CC) -g -c -o $@ -Wall -Werror $*.c $(shell pkg-config --cflags $(PKGS))
+
+animbin: $(OBJECTS) gb-anim-bin.o animbin.c
+	$(CC) -g -o $@ -Wall -Werror animbin.c $(OBJECTS) gb-anim-bin.o $(shell pkg-config --cflags --libs $(PKGS))
 
 clean:
-	rm -f animations animbin
+	rm -f animations animbin *.o
