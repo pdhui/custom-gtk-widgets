@@ -29,6 +29,8 @@ struct _GbAnimBinPrivate
    guint duration;
    guint fps;
    guint last_child_height;
+   guint last_child_width;
+   GtkOrientation orientation;
 };
 
 enum
@@ -49,8 +51,14 @@ gb_anim_bin_hide_done (GtkWidget *widget)
 
    GTK_WIDGET_CLASS(gb_anim_bin_parent_class)->hide(widget);
 
-   priv->last_child_height = 0;
-   g_object_set(widget, "height-request", -1, NULL);
+   if (priv->orientation == GTK_ORIENTATION_VERTICAL) {
+      priv->last_child_height = 0;
+      g_object_set(widget, "height-request", -1, NULL);
+   } else {
+      priv->last_child_width = 0;
+      g_object_set(widget, "width-request", -1, NULL);
+   }
+
    g_object_unref(widget);
 }
 
@@ -68,15 +76,25 @@ gb_anim_bin_hide (GtkWidget *widget)
 
    if ((child = gtk_bin_get_child(GTK_BIN(bin)))) {
       gtk_widget_get_allocation(child, &alloc);
-      priv->last_child_height = alloc.height;
+
+      if (priv->orientation == GTK_ORIENTATION_VERTICAL) {
+         priv->last_child_height = alloc.height;
+      } else {
+         priv->last_child_width = alloc.width;
+      }
 
       gtk_widget_get_allocation(widget, &alloc);
-      g_object_set(widget, "height-request", alloc.height, NULL);
+
+      if (priv->orientation == GTK_ORIENTATION_VERTICAL) {
+         g_object_set(widget, "height-request", alloc.height, NULL);
+      } else {
+         g_object_set(widget, "width-request", alloc.width, NULL);
+      }
 
       gb_object_animate_full(widget, priv->mode, priv->duration, priv->fps,
                              (GDestroyNotify)gb_anim_bin_hide_done,
                              g_object_ref(widget),
-                             "height-request", 0,
+                             (priv->orientation == GTK_ORIENTATION_VERTICAL) ? "height-request" : "width-request", 0,
                              NULL);
    } else {
       GTK_WIDGET_CLASS(gb_anim_bin_parent_class)->hide(widget);
@@ -86,9 +104,19 @@ gb_anim_bin_hide (GtkWidget *widget)
 static void
 gb_anim_bin_show_done (GtkWidget *widget)
 {
+   GbAnimBinPrivate *priv;
+   GbAnimBin *bin = (GbAnimBin *)widget;
+
    g_return_if_fail(GB_IS_ANIM_BIN(widget));
 
-   g_object_set(widget, "height-request", -1, NULL);
+   priv = bin->priv;
+
+   if (priv->orientation == GTK_ORIENTATION_VERTICAL) {
+      g_object_set(widget, "height-request", -1, NULL);
+   } else {
+      g_object_set(widget, "width-request", -1, NULL);
+   }
+
    g_object_unref(widget);
 }
 
@@ -98,21 +126,31 @@ gb_anim_bin_show (GtkWidget *widget)
    GbAnimBinPrivate *priv;
    GbAnimBin *bin = (GbAnimBin *)widget;
    GtkWidget *child;
-   gint height;
+   gint value;
 
    g_return_if_fail(GB_IS_ANIM_BIN(bin));
 
    priv = bin->priv;
 
    if ((child = gtk_bin_get_child(GTK_BIN(bin)))) {
-      g_object_set(widget, "height-request", 0, NULL);
+      if (priv->orientation == GTK_ORIENTATION_VERTICAL) {
+         g_object_set(widget, "height-request", 0, NULL);
+      } else {
+         g_object_set(widget, "width-request", 0, NULL);
+      }
+
       GTK_WIDGET_CLASS(gb_anim_bin_parent_class)->show(widget);
 
-      gtk_widget_get_preferred_height(child, NULL, &height);
+      if (priv->orientation == GTK_ORIENTATION_VERTICAL) {
+         gtk_widget_get_preferred_height(child, NULL, &value);
+      } else {
+         gtk_widget_get_preferred_width(child, NULL, &value);
+      }
+
       gb_object_animate_full(widget, priv->mode, priv->duration, priv->fps,
                              (GDestroyNotify)gb_anim_bin_show_done,
                              g_object_ref(widget),
-                             "height-request", height,
+                             (priv->orientation == GTK_ORIENTATION_VERTICAL) ? "height-request" : "width-request", value,
                              NULL);
    } else {
       GTK_WIDGET_CLASS(gb_anim_bin_parent_class)->show(widget);
@@ -124,24 +162,56 @@ gb_anim_bin_get_preferred_height (GtkWidget *widget,
                                   gint      *min_height,
                                   gint      *natural_height)
 {
+   GbAnimBinPrivate *priv = GB_ANIM_BIN(widget)->priv;
    GtkWidget *child;
    gint height;
 
-   g_object_get(widget, "height-request", &height, NULL);
-
-   if (height < 0) {
-      if ((child = gtk_bin_get_child(GTK_BIN(widget)))) {
-         gtk_widget_get_preferred_height(child, min_height, natural_height);
-         return;
+   if (priv->orientation == GTK_ORIENTATION_VERTICAL) {
+      g_object_get(widget, "height-request", &height, NULL);
+      if (height < 0) {
+         if ((child = gtk_bin_get_child(GTK_BIN(widget)))) {
+            gtk_widget_get_preferred_height(child, min_height, natural_height);
+            return;
+         }
       }
+      if (min_height) {
+         *min_height = height;
+      }
+      if (natural_height) {
+         *natural_height = height;
+      }
+   } else {
+      GTK_WIDGET_CLASS(gb_anim_bin_parent_class)->
+         get_preferred_height(widget, min_height, natural_height);
    }
+}
 
-   if (min_height) {
-      *min_height = height;
-   }
+static void
+gb_anim_bin_get_preferred_width (GtkWidget *widget,
+                                 gint      *min_width,
+                                 gint      *natural_width)
+{
+   GbAnimBinPrivate *priv = GB_ANIM_BIN(widget)->priv;
+   GtkWidget *child;
+   gint width;
 
-   if (natural_height) {
-      *natural_height = height;
+   if (priv->orientation == GTK_ORIENTATION_HORIZONTAL) {
+      g_object_get(widget, "width-request", &width, NULL);
+      if (width < 0) {
+         if ((child = gtk_bin_get_child(GTK_BIN(widget)))) {
+            gtk_widget_get_preferred_width(child, min_width, natural_width);
+            return;
+         }
+      }
+      if (min_width) {
+         *min_width = width;
+      }
+      if (natural_width) {
+         *natural_width = width;
+      }
+   } else {
+      GTK_WIDGET_CLASS(gb_anim_bin_parent_class)->
+         get_preferred_width(widget, min_width, natural_width);
    }
 }
 
@@ -170,38 +240,22 @@ gb_anim_bin_size_allocate (GtkWidget     *widget,
       }
       child_alloc.width = alloc->width;
       child_alloc.height = alloc->height;
-      if (priv->last_child_height) {
+      if ((priv->orientation == GTK_ORIENTATION_VERTICAL) && priv->last_child_height) {
          child_alloc.height = priv->last_child_height;
+         gtk_widget_size_allocate(child, &child_alloc);
+      } else if ((priv->orientation == GTK_ORIENTATION_HORIZONTAL) && priv->last_child_width) {
+         child_alloc.width = priv->last_child_width;
          gtk_widget_size_allocate(child, &child_alloc);
       }
    }
 }
 
-/**
- * gb_anim_bin_finalize:
- * @object: (in): A #GbAnimBin.
- *
- * Finalizer for a #GbAnimBin instance.  Frees any resources held by
- * the instance.
- *
- * Returns: None.
- * Side effects: None.
- */
 static void
 gb_anim_bin_finalize (GObject *object)
 {
    G_OBJECT_CLASS(gb_anim_bin_parent_class)->finalize(object);
 }
 
-/**
- * gb_anim_bin_class_init:
- * @klass: (in): A #GbAnimBinClass.
- *
- * Initializes the #GbAnimBinClass and prepares the vtable.
- *
- * Returns: None.
- * Side effects: None.
- */
 static void
 gb_anim_bin_class_init (GbAnimBinClass *klass)
 {
@@ -214,20 +268,12 @@ gb_anim_bin_class_init (GbAnimBinClass *klass)
 
    widget_class = GTK_WIDGET_CLASS(klass);
    widget_class->get_preferred_height = gb_anim_bin_get_preferred_height;
+   widget_class->get_preferred_width = gb_anim_bin_get_preferred_width;
    widget_class->hide = gb_anim_bin_hide;
    widget_class->show = gb_anim_bin_show;
    widget_class->size_allocate = gb_anim_bin_size_allocate;
 }
 
-/**
- * gb_anim_bin_init:
- * @: (in): A #GbAnimBin.
- *
- * Initializes the newly created #GbAnimBin instance.
- *
- * Returns: None.
- * Side effects: None.
- */
 static void
 gb_anim_bin_init (GbAnimBin *bin)
 {
@@ -241,4 +287,5 @@ gb_anim_bin_init (GbAnimBin *bin)
    priv->mode = GB_ANIMATION_EASE_IN_OUT_QUAD;
    priv->duration = 500;
    priv->fps = 60;
+   priv->orientation = GTK_ORIENTATION_VERTICAL;
 }
