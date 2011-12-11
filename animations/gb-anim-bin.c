@@ -21,10 +21,13 @@
 #include "gb-anim-bin.h"
 #include "gb-animation.h"
 
-G_DEFINE_TYPE(GbAnimBin, gb_anim_bin, GTK_TYPE_EVENT_BOX)
+G_DEFINE_TYPE_EXTENDED(GbAnimBin, gb_anim_bin, GTK_TYPE_EVENT_BOX, 0,
+                       G_IMPLEMENT_INTERFACE(GTK_TYPE_ORIENTABLE,
+                                             NULL))
 
 struct _GbAnimBinPrivate
 {
+   GbAnimation *animation;
    GbAnimationMode mode;
    guint duration;
    guint fps;
@@ -36,8 +39,70 @@ struct _GbAnimBinPrivate
 enum
 {
    PROP_0,
+   PROP_DURATION,
+   PROP_FRAME_RATE,
+   PROP_ORIENTATION,
    LAST_PROP
 };
+
+static GParamSpec *gParamSpecs[LAST_PROP];
+
+GtkWidget *
+gb_anim_bin_new (void)
+{
+   return g_object_new(GB_TYPE_ANIM_BIN,
+                       "orientation", GTK_ORIENTATION_VERTICAL,
+                       NULL);
+}
+
+guint
+gb_anim_bin_get_duration (GbAnimBin *bin)
+{
+   g_return_val_if_fail(GB_IS_ANIM_BIN(bin), 0);
+   return bin->priv->duration;
+}
+
+void
+gb_anim_bin_set_duration (GbAnimBin *bin,
+                          guint      duration)
+{
+   g_return_if_fail(GB_IS_ANIM_BIN(bin));
+   bin->priv->duration = duration;
+   g_object_notify_by_pspec(G_OBJECT(bin), gParamSpecs[PROP_DURATION]);
+}
+
+guint
+gb_anim_bin_get_frame_rate (GbAnimBin *bin)
+{
+   g_return_val_if_fail(GB_IS_ANIM_BIN(bin), 0);
+   return bin->priv->fps;
+}
+
+void
+gb_anim_bin_set_frame_rate (GbAnimBin *bin,
+                            guint      frame_rate)
+{
+   g_return_if_fail(GB_IS_ANIM_BIN(bin));
+   bin->priv->fps = frame_rate;
+   g_object_notify_by_pspec(G_OBJECT(bin), gParamSpecs[PROP_FRAME_RATE]);
+}
+
+static void
+gb_anim_bin_cancel_animation (GbAnimBin *bin)
+{
+   GbAnimBinPrivate *priv;
+   GbAnimation *animation;
+
+   g_return_if_fail(GB_IS_ANIM_BIN(bin));
+
+   priv = bin->priv;
+
+   if ((animation = priv->animation)) {
+      priv->animation = NULL;
+      g_object_remove_weak_pointer(G_OBJECT(animation),
+                                   (gpointer *)&priv->animation);
+   }
+}
 
 static void
 gb_anim_bin_hide_done (GtkWidget *widget)
@@ -74,6 +139,8 @@ gb_anim_bin_hide (GtkWidget *widget)
 
    priv = bin->priv;
 
+   gb_anim_bin_cancel_animation(bin);
+
    if ((child = gtk_bin_get_child(GTK_BIN(bin)))) {
       gtk_widget_get_allocation(child, &alloc);
 
@@ -91,11 +158,14 @@ gb_anim_bin_hide (GtkWidget *widget)
          g_object_set(widget, "width-request", alloc.width, NULL);
       }
 
-      gb_object_animate_full(widget, priv->mode, priv->duration, priv->fps,
-                             (GDestroyNotify)gb_anim_bin_hide_done,
-                             g_object_ref(widget),
-                             (priv->orientation == GTK_ORIENTATION_VERTICAL) ? "height-request" : "width-request", 0,
-                             NULL);
+      priv->animation =
+         gb_object_animate_full(widget, priv->mode, priv->duration, priv->fps,
+                                (GDestroyNotify)gb_anim_bin_hide_done,
+                                g_object_ref(widget),
+                                (priv->orientation == GTK_ORIENTATION_VERTICAL) ? "height-request" : "width-request", 0,
+                                NULL);
+      g_object_add_weak_pointer(G_OBJECT(priv->animation),
+                                (gpointer *)&priv->animation);
    } else {
       GTK_WIDGET_CLASS(gb_anim_bin_parent_class)->hide(widget);
    }
@@ -132,6 +202,8 @@ gb_anim_bin_show (GtkWidget *widget)
 
    priv = bin->priv;
 
+   gb_anim_bin_cancel_animation(bin);
+
    if ((child = gtk_bin_get_child(GTK_BIN(bin)))) {
       if (priv->orientation == GTK_ORIENTATION_VERTICAL) {
          g_object_set(widget, "height-request", 0, NULL);
@@ -147,11 +219,14 @@ gb_anim_bin_show (GtkWidget *widget)
          gtk_widget_get_preferred_width(child, NULL, &value);
       }
 
-      gb_object_animate_full(widget, priv->mode, priv->duration, priv->fps,
-                             (GDestroyNotify)gb_anim_bin_show_done,
-                             g_object_ref(widget),
-                             (priv->orientation == GTK_ORIENTATION_VERTICAL) ? "height-request" : "width-request", value,
-                             NULL);
+      priv->animation =
+         gb_object_animate_full(widget, priv->mode, priv->duration, priv->fps,
+                                (GDestroyNotify)gb_anim_bin_show_done,
+                                g_object_ref(widget),
+                                (priv->orientation == GTK_ORIENTATION_VERTICAL) ? "height-request" : "width-request", value,
+                                NULL);
+      g_object_add_weak_pointer(G_OBJECT(priv->animation),
+                                (gpointer *)&priv->animation);
    } else {
       GTK_WIDGET_CLASS(gb_anim_bin_parent_class)->show(widget);
    }
@@ -250,10 +325,78 @@ gb_anim_bin_size_allocate (GtkWidget     *widget,
    }
 }
 
+static GtkOrientation
+gb_anim_bin_get_orientation (GbAnimBin *bin)
+{
+   g_return_val_if_fail(GB_IS_ANIM_BIN(bin), 0);
+   return bin->priv->orientation;
+}
+
+static void
+gb_anim_bin_set_orientation (GbAnimBin      *bin,
+                             GtkOrientation  orientation)
+{
+   g_return_if_fail(GB_IS_ANIM_BIN(bin));
+
+   if (bin->priv->animation) {
+      g_warning("Cannot change orientation while in an animation!");
+      return;
+   }
+
+   bin->priv->orientation = orientation;
+   g_object_notify(G_OBJECT(bin), "orientation");
+}
+
 static void
 gb_anim_bin_finalize (GObject *object)
 {
    G_OBJECT_CLASS(gb_anim_bin_parent_class)->finalize(object);
+}
+
+static void
+gb_anim_bin_get_property (GObject    *object,
+                          guint       prop_id,
+                          GValue     *value,
+                          GParamSpec *pspec)
+{
+   GbAnimBin *bin = GB_ANIM_BIN(object);
+
+   switch (prop_id) {
+   case PROP_DURATION:
+      g_value_set_uint(value, gb_anim_bin_get_duration(bin));
+      break;
+   case PROP_FRAME_RATE:
+      g_value_set_uint(value, gb_anim_bin_get_frame_rate(bin));
+      break;
+   case PROP_ORIENTATION:
+      g_value_set_enum(value, gb_anim_bin_get_orientation(bin));
+      break;
+   default:
+      G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
+   }
+}
+
+static void
+gb_anim_bin_set_property (GObject      *object,
+                          guint         prop_id,
+                          const GValue *value,
+                          GParamSpec   *pspec)
+{
+   GbAnimBin *bin = GB_ANIM_BIN(object);
+
+   switch (prop_id) {
+   case PROP_DURATION:
+      gb_anim_bin_set_duration(bin, g_value_get_uint(value));
+      break;
+   case PROP_FRAME_RATE:
+      gb_anim_bin_set_frame_rate(bin, g_value_get_uint(value));
+      break;
+   case PROP_ORIENTATION:
+      gb_anim_bin_set_orientation(bin, g_value_get_enum(value));
+      break;
+   default:
+      G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
+   }
 }
 
 static void
@@ -264,6 +407,8 @@ gb_anim_bin_class_init (GbAnimBinClass *klass)
 
    object_class = G_OBJECT_CLASS(klass);
    object_class->finalize = gb_anim_bin_finalize;
+   object_class->get_property = gb_anim_bin_get_property;
+   object_class->set_property = gb_anim_bin_set_property;
    g_type_class_add_private(object_class, sizeof(GbAnimBinPrivate));
 
    widget_class = GTK_WIDGET_CLASS(klass);
@@ -272,6 +417,32 @@ gb_anim_bin_class_init (GbAnimBinClass *klass)
    widget_class->hide = gb_anim_bin_hide;
    widget_class->show = gb_anim_bin_show;
    widget_class->size_allocate = gb_anim_bin_size_allocate;
+
+   g_object_class_override_property(object_class,
+                                    PROP_ORIENTATION,
+                                    "orientation");
+
+   gParamSpecs[PROP_DURATION] =
+      g_param_spec_uint("duration",
+                          _("Duration"),
+                          _("The duration of the animation."),
+                          0,
+                          G_MAXUINT,
+                          500,
+                          G_PARAM_READWRITE);
+   g_object_class_install_property(object_class, PROP_DURATION,
+                                   gParamSpecs[PROP_DURATION]);
+
+   gParamSpecs[PROP_FRAME_RATE] =
+      g_param_spec_uint("frame-rate",
+                          _("Frame Rate"),
+                          _("The number of frames per second."),
+                          1,
+                          G_MAXUINT,
+                          60,
+                          G_PARAM_READWRITE);
+   g_object_class_install_property(object_class, PROP_FRAME_RATE,
+                                   gParamSpecs[PROP_FRAME_RATE]);
 }
 
 static void
