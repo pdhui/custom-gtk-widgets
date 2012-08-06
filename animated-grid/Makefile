@@ -14,5 +14,5 @@ FILES += ppg-timeout-interval.h
 FILES += main.c
 
 simply-chat: $(FILES) Makefile
-	$(CC) -o $@ -g -Wall -Werror $(shell pkg-config --cflags --libs gtk+-3.0) $(FILES)
+	$(CC) -o $@ -g $(shell pkg-config --cflags --libs gtk+-3.0) $(FILES)
 
