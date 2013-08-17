@@ -45,12 +45,13 @@ typedef struct
 
 struct _GbAnimationPrivate
 {
-   gpointer  target;        /* Target object to animate */
-   guint64   begin_msec;    /* Time in which animation started */
-   guint     duration_msec; /* Duration of animation */
-   guint     mode;          /* Tween mode */
-   guint     tween_handler; /* GSource performing tweens */
-   GArray   *tweens;        /* Array of tweens to perform */
+   gpointer       target;        /* Target object to animate */
+   guint64        begin_msec;    /* Time in which animation started */
+   guint          duration_msec; /* Duration of animation */
+   guint          mode;          /* Tween mode */
+   guint          tween_handler; /* GSource performing tweens */
+   GArray        *tweens;        /* Array of tweens to perform */
+   GdkFrameClock *frame_clock;    /* An optional frame-clock for sync. */
 };
 
 
@@ -58,6 +59,7 @@ enum
 {
    PROP_0,
    PROP_DURATION,
+   PROP_FRAME_CLOCK,
    PROP_MODE,
    PROP_TARGET,
    LAST_PROP
@@ -74,7 +76,6 @@ enum
 /*
  * Helper macros.
  */
-#define TIMEVAL_TO_MSEC(t) (((t).tv_sec * 1000UL) + ((t).tv_usec / 1000UL))
 #define LAST_FUNDAMENTAL 64
 #define TWEEN(type)                                         \
     static void                                             \
@@ -408,6 +409,34 @@ gb_animation_get_value_at_offset (GbAnimation *animation,
    }
 }
 
+static void
+gb_animation_set_frame_clock (GbAnimation   *animation,
+                              GdkFrameClock *frame_clock)
+{
+   GbAnimationPrivate *priv = animation->priv;
+
+   if (frame_clock) {
+      g_clear_object(&priv->frame_clock);
+      priv->frame_clock = frame_clock ? g_object_ref(frame_clock) : NULL;
+   }
+}
+
+static void
+gb_animation_set_target (GbAnimation *animation,
+                         gpointer     target)
+{
+   GbAnimationPrivate *priv = animation->priv;
+
+   g_assert(!priv->target);
+
+   priv->target = g_object_ref(target);
+
+   if (GTK_IS_WIDGET(priv->target)) {
+      gb_animation_set_frame_clock(animation,
+                                   gtk_widget_get_frame_clock(priv->target));
+   }
+}
+
 
 /**
  * gb_animation_tick:
@@ -499,12 +528,13 @@ gb_animation_timeout_cb (gpointer user_data)
 
 
 static gboolean
-gb_animation_widget_tick_cb (GtkWidget     *widget,
-                             GdkFrameClock *frame_clock,
-                             gpointer       user_data)
+gb_animation_widget_tick_cb (GdkFrameClock *frame_clock,
+                             GbAnimation   *animation)
 {
-   GbAnimation *animation = user_data;
    gboolean ret;
+
+   g_assert(GDK_IS_FRAME_CLOCK(frame_clock));
+   g_assert(GB_IS_ANIMATION(animation));
 
    if (!(ret = gb_animation_tick(animation))) {
       gb_animation_stop(animation);
@@ -528,7 +558,6 @@ void
 gb_animation_start (GbAnimation *animation)
 {
    GbAnimationPrivate *priv;
-   GdkFrameClock *frame_clock;
 
    g_return_if_fail(GB_IS_ANIMATION(animation));
    g_return_if_fail(!animation->priv->tween_handler);
@@ -538,14 +567,14 @@ gb_animation_start (GbAnimation *animation)
    g_object_ref_sink(animation);
    gb_animation_load_begin_values(animation);
 
-   if (GTK_IS_WIDGET(priv->target)) {
-      frame_clock = gtk_widget_get_frame_clock(priv->target);
-      priv->begin_msec = gdk_frame_clock_get_frame_time(frame_clock) / 1000UL;
+   if (priv->frame_clock) {
+      priv->begin_msec = gdk_frame_clock_get_frame_time(priv->frame_clock) / 1000UL;
       priv->tween_handler =
-         gtk_widget_add_tick_callback(priv->target,
-                                      gb_animation_widget_tick_cb,
-                                      g_object_ref(animation),
-                                      g_object_unref);
+         g_signal_connect(priv->frame_clock,
+                          "update",
+                          G_CALLBACK(gb_animation_widget_tick_cb),
+                          animation);
+      gdk_frame_clock_begin_updating(priv->frame_clock);
    } else {
       priv->begin_msec = g_get_monotonic_time() / 1000UL;
       priv->tween_handler = gb_frame_source_add(FALLBACK_FRAME_RATE,
@@ -575,12 +604,14 @@ gb_animation_stop (GbAnimation *animation)
    priv = animation->priv;
 
    if (priv->tween_handler) {
-      if (GTK_IS_WIDGET(priv->target)) {
-         gtk_widget_remove_tick_callback(priv->target, priv->tween_handler);
+      if (priv->frame_clock) {
+         gdk_frame_clock_end_updating(priv->frame_clock);
+         g_signal_handler_disconnect(priv->frame_clock, priv->tween_handler);
+         priv->tween_handler = 0;
       } else {
          g_source_remove(priv->tween_handler);
+         priv->tween_handler = 0;
       }
-      priv->tween_handler = 0;
       gb_animation_unload_begin_values(animation);
       g_object_unref(animation);
    }
@@ -648,12 +679,9 @@ static void
 gb_animation_dispose (GObject *object)
 {
    GbAnimationPrivate *priv = GB_ANIMATION(object)->priv;
-   gpointer instance;
 
-   if ((instance = priv->target)) {
-      priv->target = NULL;
-      g_object_unref(instance);
-   }
+   g_clear_object(&priv->target);
+   g_clear_object(&priv->frame_clock);
 
    G_OBJECT_CLASS(gb_animation_parent_class)->dispose(object);
 }
@@ -709,11 +737,14 @@ gb_animation_set_property (GObject      *object,
    case PROP_DURATION:
       animation->priv->duration_msec = g_value_get_uint(value);
       break;
+   case PROP_FRAME_CLOCK:
+      gb_animation_set_frame_clock(animation, g_value_get_object(value));
+      break;
    case PROP_MODE:
       animation->priv->mode = g_value_get_enum(value);
       break;
    case PROP_TARGET:
-      animation->priv->target = g_value_dup_object(value);
+      gb_animation_set_target(animation, g_value_get_object(value));
       break;
    default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
@@ -761,6 +792,17 @@ gb_animation_class_init (GbAnimationClass *klass)
                          G_PARAM_STATIC_STRINGS));
    g_object_class_install_property(object_class, PROP_DURATION,
                                    gParamSpecs[PROP_DURATION]);
+
+   gParamSpecs[PROP_FRAME_CLOCK] =
+      g_param_spec_object("frame-clock",
+                          _("Frame Clock"),
+                          _("An optional frame-clock to synchronize with."),
+                          GDK_TYPE_FRAME_CLOCK,
+                          (G_PARAM_WRITABLE |
+                           G_PARAM_CONSTRUCT_ONLY |
+                           G_PARAM_STATIC_STRINGS));
+   g_object_class_install_property(object_class, PROP_FRAME_CLOCK,
+                                   gParamSpecs[PROP_FRAME_CLOCK]);
 
    /**
     * GbAnimation:mode:
@@ -905,6 +947,7 @@ GbAnimation *
 gb_object_animatev (gpointer         object,
                     GbAnimationMode  mode,
                     guint            duration_msec,
+                    GdkFrameClock   *frame_clock,
                     const gchar     *first_property,
                     va_list          args)
 {
@@ -927,6 +970,7 @@ gb_object_animatev (gpointer         object,
    klass = G_OBJECT_GET_CLASS(object);
    animation = g_object_new(GB_TYPE_ANIMATION,
                             "duration", duration_msec,
+                            "frame-clock", frame_clock,
                             "mode", mode,
                             "target", object,
                             NULL);
@@ -997,6 +1041,7 @@ GbAnimation*
 gb_object_animate (gpointer         object,
                    GbAnimationMode  mode,
                    guint            duration_msec,
+                   GdkFrameClock   *frame_clock,
                    const gchar     *first_property,
                    ...)
 {
@@ -1004,7 +1049,7 @@ gb_object_animate (gpointer         object,
    va_list args;
 
    va_start(args, first_property);
-   animation = gb_object_animatev(object, mode, duration_msec,
+   animation = gb_object_animatev(object, mode, duration_msec, frame_clock,
                                   first_property, args);
    va_end(args);
    return animation;
@@ -1019,6 +1064,7 @@ GbAnimation*
 gb_object_animate_full (gpointer         object,
                         GbAnimationMode  mode,
                         guint            duration_msec,
+                        GdkFrameClock   *frame_clock,
                         GDestroyNotify   notify,
                         gpointer         notify_data,
                         const gchar     *first_property,
@@ -1031,6 +1077,7 @@ gb_object_animate_full (gpointer         object,
    animation = gb_object_animatev(object,
                                   mode,
                                   duration_msec,
+                                  frame_clock,
                                   first_property,
                                   args);
    va_end(args);

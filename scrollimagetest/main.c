@@ -3,12 +3,13 @@
 #include "gb-animation.h"
 #include "img-view.h"
 
-static guint realize_handler;
+static guint          realize_handler;
+static GdkFrameClock *frame_clock;
 
 static gboolean
 scroll1 (gpointer adj)
 {
-   gb_object_animate(adj, GB_ANIMATION_EASE_IN_OUT_QUAD, 3500,
+   gb_object_animate(adj, GB_ANIMATION_EASE_IN_OUT_QUAD, 3500, frame_clock,
                      "value", 3000.0,
                      NULL);
    return FALSE;
@@ -17,7 +18,7 @@ scroll1 (gpointer adj)
 static gboolean
 scroll2 (gpointer adj)
 {
-   gb_object_animate(adj, GB_ANIMATION_EASE_IN_OUT_QUAD, 1000,
+   gb_object_animate(adj, GB_ANIMATION_EASE_IN_OUT_QUAD, 1000, frame_clock,
                      "value", 000.0,
                      NULL);
    return FALSE;
@@ -26,7 +27,7 @@ scroll2 (gpointer adj)
 static gboolean
 scroll3 (gpointer adj)
 {
-   gb_object_animate(adj, GB_ANIMATION_EASE_IN_OUT_QUAD, 1000,
+   gb_object_animate(adj, GB_ANIMATION_EASE_IN_OUT_QUAD, 1000, frame_clock,
                      "value", 10450.0,
                      NULL);
    return FALSE;
@@ -71,6 +72,12 @@ make_surface (GtkWidget       *widget,
    realize_handler = 0;
 }
 
+static void
+view_realized (GtkWidget *widget)
+{
+   frame_clock = gtk_widget_get_frame_clock(widget);
+}
+
 gint
 main (gint   argc,
       gchar *argv[])
@@ -103,6 +110,7 @@ main (gint   argc,
    view = g_object_new(IMG_TYPE_VIEW,
                        "visible", TRUE,
                        NULL);
+   g_signal_connect(view, "realize", G_CALLBACK(view_realized), NULL);
    if (use_xlib) {
       g_print("Using Xlib surface\n");
       realize_handler = g_signal_connect_after(view,
