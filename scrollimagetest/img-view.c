@@ -37,6 +37,7 @@ struct _ImgViewPrivate
    GtkAdjustment   *vadjustment;
    guint            hadjustment_handler;
    guint            vadjustment_handler;
+   guint            vadj_value;
 };
 
 enum
@@ -72,7 +73,22 @@ img_view_set_surface (ImgView         *view,
    g_return_if_fail(IMG_IS_VIEW(view));
    g_clear_pointer(&view->priv->surface, cairo_surface_destroy);
    view->priv->surface = surface ? cairo_surface_reference(surface) : NULL;
-   gtk_widget_queue_draw(GTK_WIDGET(view));
+   gtk_widget_queue_resize(GTK_WIDGET(view));
+}
+
+static void
+vadj_changed (GtkAdjustment *adjustment,
+              ImgView       *view)
+{
+   ImgViewPrivate *priv = view->priv;
+   GdkWindow *window;
+   guint value;
+
+   window = gtk_widget_get_window(GTK_WIDGET(view));
+   value = gtk_adjustment_get_value(adjustment);
+   //g_print("value: %d\n", value);
+   gdk_window_scroll(window, 0, priv->vadj_value - value);
+   priv->vadj_value = value;
 }
 
 static void
@@ -106,8 +122,10 @@ img_view_set_vadjustment (ImgView       *view,
    view->priv->vadjustment_handler =
       g_signal_connect(view->priv->vadjustment,
                        "value-changed",
-                       G_CALLBACK(value_changed),
+                       G_CALLBACK(vadj_changed),
                        view);
+
+   gtk_widget_queue_resize(GTK_WIDGET(view));
 }
 
 static void
@@ -136,6 +154,8 @@ img_view_set_hadjustment (ImgView       *view,
                        "value-changed",
                        G_CALLBACK(value_changed),
                        view);
+
+   gtk_widget_queue_resize(GTK_WIDGET(view));
 }
 
 static void
@@ -162,12 +182,12 @@ img_view_size_allocate (GtkWidget     *widget,
 
       gtk_adjustment_set_page_size(priv->vadjustment, allocation->height);
       gtk_adjustment_set_page_increment(priv->vadjustment, MAX(1, allocation->height * 0.75));
-      gtk_adjustment_set_step_increment(priv->vadjustment, MAX(1, allocation->height * 0.05));
+      gtk_adjustment_set_step_increment(priv->vadjustment, 1);
       gtk_adjustment_set_upper(priv->vadjustment, height);
 
       gtk_adjustment_set_page_size(priv->hadjustment, allocation->width);
       gtk_adjustment_set_page_increment(priv->hadjustment, MAX(1, allocation->width * 0.75));
-      gtk_adjustment_set_step_increment(priv->hadjustment, MAX(1, allocation->width * 0.05));
+      gtk_adjustment_set_step_increment(priv->hadjustment, 1);
       gtk_adjustment_set_upper(priv->hadjustment, width);
    }
 }
@@ -179,23 +199,29 @@ img_view_draw (GtkWidget *widget,
    ImgViewPrivate *priv = IMG_VIEW(widget)->priv;
    GtkAllocation alloc;
    GdkWindow *window = gtk_widget_get_window(widget);
-   int xvalue;
+   //int xvalue;
    int yvalue;
 
    if (gtk_cairo_should_draw_window(cr, window) && priv->surface) {
       gtk_widget_get_allocation(widget, &alloc);
 
-      xvalue = gtk_adjustment_get_value(priv->hadjustment);
+      //xvalue = gtk_adjustment_get_value(priv->hadjustment);
       yvalue = gtk_adjustment_get_value(priv->vadjustment);
 
       cairo_save(cr);
       cairo_rectangle(cr, 0, 0, alloc.width, alloc.height);
-      cairo_set_source_surface(cr, priv->surface, -xvalue, -yvalue);
+      cairo_set_source_surface(cr, priv->surface, 0, -yvalue);
       cairo_fill(cr);
       cairo_restore(cr);
    }
 
    return FALSE;
+}
+
+static void
+img_view_realize (GtkWidget *widget)
+{
+   GTK_WIDGET_CLASS(img_view_parent_class)->realize(widget);
 }
 
 static void
@@ -289,6 +315,7 @@ img_view_class_init (ImgViewClass *klass)
    widget_class = GTK_WIDGET_CLASS(klass);
    widget_class->size_allocate = img_view_size_allocate;
    widget_class->draw = img_view_draw;
+   widget_class->realize = img_view_realize;
 
    gParamSpecs[PROP_SURFACE] =
       g_param_spec_boxed("surface",
@@ -348,6 +375,8 @@ img_view_init (ImgView *view)
    view->priv = G_TYPE_INSTANCE_GET_PRIVATE(view,
                                             IMG_TYPE_VIEW,
                                             ImgViewPrivate);
+
+   gtk_widget_add_events(GTK_WIDGET(view), GDK_SMOOTH_SCROLL_MASK);
 }
 
 static void
