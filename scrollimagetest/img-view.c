@@ -33,10 +33,14 @@ G_DEFINE_TYPE_EXTENDED(ImgView,
 struct _ImgViewPrivate
 {
    cairo_surface_t *surface;
+
    GtkAdjustment   *hadjustment;
    GtkAdjustment   *vadjustment;
+
    guint            hadjustment_handler;
    guint            vadjustment_handler;
+
+   guint            hadj_value;
    guint            vadj_value;
 };
 
@@ -86,16 +90,22 @@ vadj_changed (GtkAdjustment *adjustment,
 
    window = gtk_widget_get_window(GTK_WIDGET(view));
    value = gtk_adjustment_get_value(adjustment);
-   //g_print("value: %d\n", value);
    gdk_window_scroll(window, 0, priv->vadj_value - value);
    priv->vadj_value = value;
 }
 
 static void
-value_changed (GtkAdjustment *adjustment,
-               ImgView       *view)
+hadj_changed (GtkAdjustment *adjustment,
+              ImgView       *view)
 {
-   gtk_widget_queue_draw(GTK_WIDGET(view));
+   ImgViewPrivate *priv = view->priv;
+   GdkWindow *window;
+   guint value;
+
+   window = gtk_widget_get_window(GTK_WIDGET(view));
+   value = gtk_adjustment_get_value(adjustment);
+   gdk_window_scroll(window, priv->hadj_value - value, 0);
+   priv->hadj_value = value;
 }
 
 static void
@@ -152,7 +162,7 @@ img_view_set_hadjustment (ImgView       *view,
    view->priv->hadjustment_handler =
       g_signal_connect(view->priv->hadjustment,
                        "value-changed",
-                       G_CALLBACK(value_changed),
+                       G_CALLBACK(hadj_changed),
                        view);
 
    gtk_widget_queue_resize(GTK_WIDGET(view));
@@ -162,33 +172,37 @@ static void
 img_view_size_allocate (GtkWidget     *widget,
                         GtkAllocation *allocation)
 {
+   cairo_surface_type_t surface_type;
    ImgViewPrivate *priv = ((ImgView *)widget)->priv;
-   int width;
-   int height;
+   int width = 0;
+   int height = 0;
 
    GTK_WIDGET_CLASS(img_view_parent_class)->size_allocate(widget, allocation);
 
    if (priv->surface) {
-      if (cairo_surface_get_type(priv->surface) == CAIRO_SURFACE_TYPE_IMAGE) {
+      surface_type = cairo_surface_get_type(priv->surface);
+
+      if (surface_type == CAIRO_SURFACE_TYPE_IMAGE) {
          width = cairo_image_surface_get_width(priv->surface);
          height = cairo_image_surface_get_height(priv->surface);
-      } else if (cairo_surface_get_type(priv->surface) == CAIRO_SURFACE_TYPE_XLIB) {
+      } else if (surface_type == CAIRO_SURFACE_TYPE_XLIB) {
          width = cairo_xlib_surface_get_width(priv->surface);
          height = cairo_xlib_surface_get_height(priv->surface);
-      } else {
-         /* TODO: Generic surface size functions? */
-         g_assert_not_reached();
       }
 
       gtk_adjustment_set_page_size(priv->vadjustment, allocation->height);
-      gtk_adjustment_set_page_increment(priv->vadjustment, MAX(1, allocation->height * 0.75));
+      gtk_adjustment_set_page_increment(priv->vadjustment,
+                                        MAX(1, allocation->height * 0.75));
       gtk_adjustment_set_step_increment(priv->vadjustment, 1);
-      gtk_adjustment_set_upper(priv->vadjustment, height);
+      gtk_adjustment_set_upper(priv->vadjustment,
+                               MAX(height, allocation->height));
 
       gtk_adjustment_set_page_size(priv->hadjustment, allocation->width);
-      gtk_adjustment_set_page_increment(priv->hadjustment, MAX(1, allocation->width * 0.75));
+      gtk_adjustment_set_page_increment(priv->hadjustment,
+                                        MAX(1, allocation->width * 0.75));
       gtk_adjustment_set_step_increment(priv->hadjustment, 1);
-      gtk_adjustment_set_upper(priv->hadjustment, width);
+      gtk_adjustment_set_upper(priv->hadjustment,
+                               MAX(width, allocation->width));
    }
 }
 
@@ -199,19 +213,21 @@ img_view_draw (GtkWidget *widget,
    ImgViewPrivate *priv = IMG_VIEW(widget)->priv;
    GtkAllocation alloc;
    GdkWindow *window = gtk_widget_get_window(widget);
-   //int xvalue;
+   int xvalue;
    int yvalue;
 
    if (gtk_cairo_should_draw_window(cr, window) && priv->surface) {
       gtk_widget_get_allocation(widget, &alloc);
 
-      //xvalue = gtk_adjustment_get_value(priv->hadjustment);
+      xvalue = gtk_adjustment_get_value(priv->hadjustment);
       yvalue = gtk_adjustment_get_value(priv->vadjustment);
 
       cairo_save(cr);
-      cairo_rectangle(cr, 0, 0, alloc.width, alloc.height);
-      cairo_set_source_surface(cr, priv->surface, 0, -yvalue);
-      cairo_fill(cr);
+      cairo_translate(cr, -xvalue, -yvalue);
+      cairo_set_source_surface(cr, priv->surface, 0, 0);
+      cairo_rectangle(cr, xvalue, yvalue, alloc.width, alloc.height);
+      cairo_clip_preserve(cr);
+      cairo_paint(cr);
       cairo_restore(cr);
    }
 
