@@ -9,8 +9,11 @@ static GdkFrameClock *frame_clock;
 static gboolean
 scroll1 (gpointer adj)
 {
-   gb_object_animate(adj, GB_ANIMATION_EASE_IN_OUT_QUAD, 3500, frame_clock,
-                     "value", 3000.0,
+   gdouble upper;
+
+   g_object_get(adj, "upper", &upper, NULL);
+   gb_object_animate(adj, GB_ANIMATION_EASE_IN_OUT_QUAD, 10000, frame_clock,
+                     "value", upper,
                      NULL);
    return FALSE;
 }
@@ -18,7 +21,7 @@ scroll1 (gpointer adj)
 static gboolean
 scroll2 (gpointer adj)
 {
-   gb_object_animate(adj, GB_ANIMATION_EASE_IN_OUT_QUAD, 1000, frame_clock,
+   gb_object_animate(adj, GB_ANIMATION_EASE_IN_OUT_QUAD, 10000, frame_clock,
                      "value", 000.0,
                      NULL);
    return FALSE;
@@ -27,9 +30,11 @@ scroll2 (gpointer adj)
 static gboolean
 scroll3 (gpointer adj)
 {
+#if 0
    gb_object_animate(adj, GB_ANIMATION_EASE_IN_OUT_QUAD, 1000, frame_clock,
                      "value", 10450.0,
                      NULL);
+#endif
    return FALSE;
 }
 
@@ -127,8 +132,8 @@ main (gint   argc,
    adj = gtk_scrolled_window_get_vadjustment(GTK_SCROLLED_WINDOW(scroller));
 
    g_timeout_add(1000, scroll1, adj);
-   g_timeout_add(5000, scroll2, adj);
-   g_timeout_add(8000, scroll3, adj);
+   g_timeout_add(11000, scroll2, adj);
+   g_timeout_add(20000, scroll3, adj);
 
    g_signal_connect(window, "delete-event", gtk_main_quit, NULL);
 
