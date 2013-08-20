@@ -19,7 +19,7 @@
 #ifndef GB_ANIMATION_H
 #define GB_ANIMATION_H
 
-#include <glib-object.h>
+#include <gdk/gdk.h>
 
 G_BEGIN_DECLS
 
