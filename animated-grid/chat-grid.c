@@ -1,17 +1,17 @@
 /* chat-grid.c
  *
  * Copyright (C) 2011 Christian Hergert <chris@dronelabs.com>
- * 
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
@@ -19,7 +19,7 @@
 #include <glib/gi18n.h>
 
 #include "chat-grid.h"
-#include "ppg-animation.h"
+#include "gb-animation.h"
 
 G_DEFINE_TYPE(ChatGrid, chat_grid, GTK_TYPE_FIXED)
 
@@ -116,7 +116,7 @@ chat_grid_size_allocate (GtkWidget     *widget,
                          GtkAllocation *allocation)
 {
 	ChatGridPrivate *priv;
-	PpgAnimation *anim;
+	GbAnimation *anim;
 	GtkWidget *child;
 	ChatGrid *grid = (ChatGrid *)widget;
 	GList *children;
@@ -174,10 +174,10 @@ chat_grid_size_allocate (GtkWidget     *widget,
 			if (!g_getenv("CHAT_DISABLE_ANIMATIONS")) {
 				anim = g_object_get_qdata(G_OBJECT(child), gQuarkAnimation);
 				if (anim) {
-					ppg_animation_stop(anim);
+					gb_animation_stop(anim);
 				}
-				anim = g_object_animate(child,
-				                        PPG_ANIMATION_EASE_IN_OUT_QUAD, 300,
+				anim = gb_object_animate(child,
+				                        GB_ANIMATION_EASE_IN_OUT_QUAD, 300, NULL,
 				                        "x", x, "y", y, NULL);
 				g_object_set_qdata_full(G_OBJECT(child), gQuarkAnimation,
 				                        g_object_ref(anim), g_object_unref);

@@ -5,12 +5,10 @@ FILES += chat-avatar.c
 FILES += chat-avatar.h
 FILES += chat-grid.c
 FILES += chat-grid.h
-FILES += ppg-animation.c
-FILES += ppg-animation.h
-FILES += ppg-frame-source.c
-FILES += ppg-frame-source.h
-FILES += ppg-timeout-interval.c
-FILES += ppg-timeout-interval.h
+FILES += gb-animation.c
+FILES += gb-animation.h
+FILES += gb-frame-source.c
+FILES += gb-frame-source.h
 FILES += main.c
 
 simply-chat: $(FILES) Makefile
